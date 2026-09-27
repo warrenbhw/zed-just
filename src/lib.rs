@@ -1,9 +1,9 @@
 use std::fs;
 
 use zed_extension_api::{
-    Architecture, Command, DownloadedFileType, Extension, GithubReleaseOptions, LanguageServerId,
-    Os, Result, Worktree, current_platform, download_file, latest_github_release,
-    make_file_executable, register_extension,
+    Architecture, Command, DownloadedFileType, Extension, LanguageServerId, Os, Result, Worktree,
+    current_platform, download_file, github_release_by_tag_name, make_file_executable,
+    register_extension,
 };
 
 struct JustExtension {
@@ -23,20 +23,16 @@ impl JustExtension {
             return Ok(path.clone());
         }
 
-        // Check if just-lsp is on PATH
-        if let Some(path) = worktree.which("just-lsp") {
+        // An explicitly named fork binary can be used on platforms without a
+        // release asset. A plain just-lsp may be the incompatible upstream build.
+        if let Some(path) = worktree.which("just-lsp-mesa") {
             self.cached_binary_path = Some(path.clone());
             return Ok(path);
         }
 
-        // Download and install just-lsp
-        let release = latest_github_release(
-            "terror/just-lsp",
-            GithubReleaseOptions {
-                require_assets: true,
-                pre_release: false,
-            },
-        )?;
+        // Pin the server alongside the grammar: upstream 0.9.0 does not resolve
+        // qualified module dependencies. Do not accidentally reuse it from PATH.
+        let release = github_release_by_tag_name("warrenbhw/just-lsp", "0.9.1")?;
 
         let (os, arch) = current_platform();
         let asset_name = format!(
@@ -63,7 +59,7 @@ impl JustExtension {
             .find(|asset| asset.name == asset_name)
             .ok_or_else(|| format!("Asset {} not found in release", asset_name))?;
 
-        let version_dir = format!("just-lsp-{}", release.version);
+        let version_dir = format!("just-lsp-mesa-{}", release.version);
         let binary_path = format!(
             "{}/just-lsp{}",
             version_dir,
